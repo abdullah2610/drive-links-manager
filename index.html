@@ -44,20 +44,18 @@
         <!-- Table -->
         <div class="overflow-x-auto">
             <table class="min-w-full bg-white rounded-lg shadow">
-
-<thead class="bg-gray-100">
-    <tr>
-        <th class="p-3 text-left cursor-pointer" onclick="sortLinks('title')">Judul</th>
-        <th class="p-3 text-left cursor-pointer" onclick="sortLinks('url')">Link</th>
-        <th class="p-3 text-left cursor-pointer" onclick="sortLinks('category')">Kategori</th>
-        <th class="p-3 text-left cursor-pointer" onclick="sortLinks('source')">Sumber</th>
-        <th class="p-3 text-left cursor-pointer" onclick="sortLinks('dateAdded')">Tanggal</th>
-        <th class="p-3 text-left cursor-pointer" onclick="sortLinks('tags')">Tag</th>
-        <th class="p-3 text-left cursor-pointer" onclick="sortLinks('description')">Deskripsi</th>
-        <th class="p-3 text-left">Aksi</th>
-    </tr>
-</thead>
-
+                <thead class="bg-gray-100">
+                    <tr>
+                        <th class="p-3 text-left cursor-pointer" onclick="sortLinks('title')">Judul</th>
+                        <th class="p-3 text-left cursor-pointer" onclick="sortLinks('url')">Link</th>
+                        <th class="p-3 text-left cursor-pointer" onclick="sortLinks('category')">Kategori</th>
+                        <th class="p-3 text-left cursor-pointer" onclick="sortLinks('source')">Sumber</th>
+                        <th class="p-3 text-left cursor-pointer" onclick="sortLinks('date_added')">Tanggal</th>
+                        <th class="p-3 text-left cursor-pointer" onclick="sortLinks('tags')">Tag</th>
+                        <th class="p-3 text-left cursor-pointer" onclick="sortLinks('description')">Deskripsi</th>
+                        <th class="p-3 text-left">Aksi</th>
+                    </tr>
+                </thead>
                 <tbody id="linksTableBody"></tbody>
             </table>
         </div>
@@ -74,134 +72,100 @@
         </div>
     </div>
 
+    <!-- Tambahkan script Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
-        // Service Worker Registration
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('sw.js')
-                .then(registration => console.log('ServiceWorker registered'))
-                .catch(error => console.log('ServiceWorker registration failed:', error));
+        // Inisialisasi Supabase
+        const supabaseUrl = 'https://kfftxklzuzbpmmdvymib.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtmZnR4a2x6dXpicG1tZHZ5bWliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzgyODg0MjksImV4cCI6MjA1Mzg2NDQyOX0.urHew6FTdaXTxpcIh16K0Zxfjv-L7lo_2Gvh3BWzbfI';
+        const supabase = supabase.createClient(supabaseUrl, supabaseKey);
+
+        let links = []; // Menyimpan data dari Supabase
+        let editingLinkId = null; // Untuk menyimpan ID link yang sedang diedit
+
+        // Fungsi untuk mengambil data dari Supabase
+        async function fetchLinks() {
+            const { data, error } = await supabase
+                .from('links')
+                .select('*');
+            if (error) {
+                console.error('Error fetching links:', error);
+            } else {
+                links = data;
+                renderLinks();
+            }
         }
 
-        // Manifest Generation
-        const manifest = {
-            name: "Drive Links Manager",
-            short_name: "DriveLinks",
-            start_url: ".",
-            display: "standalone",
-            background_color: "#ffffff",
-            theme_color: "#ffffff",
-            icons: [
-                {
-                    src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='192' height='192'%3E%3Crect width='24' height='24' fill='%234285f4'/%3E%3Cpath d='M12 2L2 19h20L12 2z' fill='white'/%3E%3C/svg%3E",
-                    sizes: "192x192",
-                    type: "image/svg+xml"
-                }
-            ]
-        };
-        const manifestBlob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
-        const manifestURL = URL.createObjectURL(manifestBlob);
-        document.getElementById('manifestPlaceholder').href = manifestURL;
+        // Fungsi untuk menambahkan link baru
+        async function addLink() {
+            const title = document.getElementById('title').value;
+            const url = document.getElementById('url').value;
+            const category = document.getElementById('category').value;
+            const source = document.getElementById('source').value;
+            const dateAdded = document.getElementById('dateAdded').value;
+            const tags = document.getElementById('tags').value;
+            const description = document.getElementById('description').value;
 
-        // Data Management
-        let links = JSON.parse(localStorage.getItem('driveLinks')) || [];
-
-let editingLinkId = null; // Variabel untuk menyimpan ID link yang sedang diedit
-
-function editLink(id) {
-    const link = links.find(link => link.id === id);
-    if (link) {
-        editingLinkId = link.id; // Simpan ID link yang sedang diedit
-        document.getElementById('title').value = link.title;
-        document.getElementById('url').value = link.url;
-        document.getElementById('category').value = link.category;
-        document.getElementById('source').value = link.source;
-        document.getElementById('dateAdded').value = link.dateAdded;
-        document.getElementById('tags').value = link.tags;
-        document.getElementById('description').value = link.description;
-    }
-}
-
-function addLink() {
-    const title = document.getElementById('title').value;
-    const url = document.getElementById('url').value;
-    const category = document.getElementById('category').value;
-    const source = document.getElementById('source').value;
-    const dateAdded = document.getElementById('dateAdded').value;
-    const tags = document.getElementById('tags').value;
-    const description = document.getElementById('description').value;
-
-    if (editingLinkId) {
-        // Jika sedang edit, perbarui data yang ada
-        const linkIndex = links.findIndex(link => link.id === editingLinkId);
-        if (linkIndex !== -1) {
-            links[linkIndex] = {
-                id: editingLinkId,
+            const newLink = {
                 title,
                 url,
                 category,
                 source,
-                dateAdded,
+                date_added: dateAdded,
                 tags,
                 description
             };
-        }
-        editingLinkId = null; // Reset ID edit
-    } else {
-        // Jika tidak, tambahkan data baru
-        const newLink = {
-            id: Date.now(),
-            title,
-            url,
-            category,
-            source,
-            dateAdded,
-            tags,
-            description
-        };
-        links.push(newLink);
-    }
 
-    saveAndRender();
-    clearForm();
-}
-
-        function deleteLink(id) {
-            links = links.filter(link => link.id !== id);
-            saveAndRender();
+            const { data, error } = await supabase
+                .from('links')
+                .insert([newLink]);
+            if (error) {
+                console.error('Error adding link:', error);
+            } else {
+                alert('Link berhasil ditambahkan!');
+                fetchLinks(); // Memuat ulang data dari Supabase
+                clearForm();
+            }
         }
 
+        // Fungsi untuk menghapus link
+        async function deleteLink(id) {
+            const { error } = await supabase
+                .from('links')
+                .delete()
+                .eq('id', id);
+            if (error) {
+                console.error('Error deleting link:', error);
+            } else {
+                alert('Link berhasil dihapus!');
+                fetchLinks(); // Memuat ulang data dari Supabase
+            }
+        }
+
+        // Fungsi untuk mengedit link
+        function editLink(id) {
+            const link = links.find(link => link.id === id);
+            if (link) {
+                editingLinkId = link.id;
+                document.getElementById('title').value = link.title;
+                document.getElementById('url').value = link.url;
+                document.getElementById('category').value = link.category;
+                document.getElementById('source').value = link.source;
+                document.getElementById('dateAdded').value = link.date_added;
+                document.getElementById('tags').value = link.tags;
+                document.getElementById('description').value = link.description;
+            }
+        }
+
+        // Fungsi untuk mengosongkan form
         function clearForm() {
             ['title', 'url', 'category', 'source', 'dateAdded', 'tags', 'description'].forEach(id => {
                 document.getElementById(id).value = '';
             });
+            editingLinkId = null; // Reset ID edit
         }
 
-        function saveAndRender() {
-            localStorage.setItem('driveLinks', JSON.stringify(links));
-            renderLinks();
-        }
-
-let sortDirection = {}; // Untuk menyimpan arah sorting (asc/desc) per kolom
-
-function sortLinks(column) {
-    // Tentukan arah sorting (default: ascending)
-    if (!sortDirection[column]) {
-        sortDirection[column] = 'asc';
-    } else {
-        sortDirection[column] = sortDirection[column] === 'asc' ? 'desc' : 'asc';
-    }
-
-    // Urutkan data
-    links.sort((a, b) => {
-        if (a[column] < b[column]) return sortDirection[column] === 'asc' ? -1 : 1;
-        if (a[column] > b[column]) return sortDirection[column] === 'asc' ? 1 : -1;
-        return 0;
-    });
-
-    // Perbarui tampilan tabel
-    renderLinks();
-}
-
+        // Fungsi untuk merender tabel
         function renderLinks() {
             const tbody = document.getElementById('linksTableBody');
             tbody.innerHTML = links.map(link => `
@@ -213,63 +177,43 @@ function sortLinks(column) {
                     </td>
                     <td class="p-3">${link.category}</td>
                     <td class="p-3">${link.source}</td>
-                    <td class="p-3">${link.dateAdded}</td>
+                    <td class="p-3">${link.date_added}</td>
                     <td class="p-3">${link.tags}</td>
                     <td class="p-3">${link.description}</td>
                     <td class="p-3">
-    			<button onclick="editLink(${link.id})" 
-            			class="bg-yellow-500 text-white px-2 py-1 rounded hover:bg-yellow-600 mr-2">
-        		Edit
-    			</button>
-    			<button onclick="deleteLink(${link.id})" 
-            			class="bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600">
-        		Hapus
-    			</button>
-		     </td>
+                        <button onclick="editLink('${link.id}')" 
+                                class="bg-yellow-500 text-white px-2 py-1 rounded hover:bg-yellow-600 mr-2">
+                            Edit
+                        </button>
+                        <button onclick="deleteLink('${link.id}')" 
+                                class="bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600">
+                            Hapus
+                        </button>
+                    </td>
                 </tr>
             `).join('');
         }
 
-        // Export/Import Functions
-        function exportData() {
-            const dataStr = JSON.stringify(links, null, 2);
-            const dataBlob = new Blob([dataStr], { type: 'application/json' });
-            const url = URL.createObjectURL(dataBlob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = 'drive-links-export.json';
-            link.click();
-        }
-
-        function importData(event) {
-            const file = event.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    try {
-                        const importedData = JSON.parse(e.target.result);
-                        links = importedData;
-                        saveAndRender();
-                        alert('Data berhasil diimpor!');
-                    } catch (error) {
-                        alert('Error mengimpor data: ' + error.message);
-                    }
-                };
-                reader.readAsText(file);
+        // Fungsi untuk sorting
+        let sortDirection = {};
+        function sortLinks(column) {
+            if (!sortDirection[column]) {
+                sortDirection[column] = 'asc';
+            } else {
+                sortDirection[column] = sortDirection[column] === 'asc' ? 'desc' : 'asc';
             }
+
+            links.sort((a, b) => {
+                if (a[column] < b[column]) return sortDirection[column] === 'asc' ? -1 : 1;
+                if (a[column] > b[column]) return sortDirection[column] === 'asc' ? 1 : -1;
+                return 0;
+            });
+
+            renderLinks();
         }
 
-        // Offline detection
-        window.addEventListener('online', updateOnlineStatus);
-        window.addEventListener('offline', updateOnlineStatus);
-
-        function updateOnlineStatus() {
-            document.body.classList.toggle('offline', !navigator.onLine);
-        }
-
-        // Initial render
-        renderLinks();
-        updateOnlineStatus();
+        // Fungsi untuk memuat data saat aplikasi pertama kali dibuka
+        document.addEventListener('DOMContentLoaded', fetchLinks);
     </script>
 </body>
 </html>
