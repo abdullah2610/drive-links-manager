@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Drive Links Manager</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-    <link rel="manifest" href="#" id="manifestPlaceholder">
+    <link rel="manifest" href="manifest.json" id="manifestPlaceholder">
     <meta name="theme-color" content="#ffffff"/>
     <style>
         .offline-message {
@@ -27,23 +27,39 @@
         <!-- Form Input -->
         <div class="bg-white p-6 rounded-lg shadow-md mb-8">
             <h2 class="text-lg font-semibold mb-4">Tambah Link Baru</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <input type="text" id="title" placeholder="Judul" class="border p-2 rounded">
-                <input type="text" id="url" placeholder="URL Google Drive" class="border p-2 rounded">
-                <input type="text" id="category" placeholder="Kategori" class="border p-2 rounded">
-                <input type="text" id="source" placeholder="Sumber" class="border p-2 rounded">
-                <input type="date" id="dateAdded" class="border p-2 rounded">
+            <form id="linkForm" onsubmit="handleSubmit(event)" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <input type="text" id="title" placeholder="Judul" class="border p-2 rounded" required>
+                <input type="url" id="url" placeholder="URL Google Drive" class="border p-2 rounded" required>
+                <input type="text" id="category" placeholder="Kategori" class="border p-2 rounded" required>
+                <input type="text" id="source" placeholder="Sumber" class="border p-2 rounded" required>
+                <input type="date" id="dateAdded" class="border p-2 rounded" required>
                 <input type="text" id="tags" placeholder="Tag (pisahkan dengan koma)" class="border p-2 rounded">
                 <textarea id="description" placeholder="Deskripsi" class="border p-2 rounded md:col-span-2"></textarea>
+                <div class="md:col-span-2">
+                    <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                        <span id="submitButtonText">Tambah Link</span>
+                    </button>
+                    <button type="button" onclick="clearForm()" class="ml-2 bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">
+                        Batal
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Search and Filter -->
+        <div class="bg-white p-4 rounded-lg shadow-md mb-4">
+            <div class="flex flex-wrap gap-4">
+                <input type="text" id="searchInput" placeholder="Cari..." 
+                       class="border p-2 rounded flex-1" oninput="filterLinks()">
+                <select id="categoryFilter" class="border p-2 rounded" onchange="filterLinks()">
+                    <option value="">Semua Kategori</option>
+                </select>
             </div>
-            <button onclick="addLink()" class="mt-4 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
-                Tambah Link
-            </button>
         </div>
 
         <!-- Table -->
-        <div class="overflow-x-auto">
-            <table class="min-w-full bg-white rounded-lg shadow">
+        <div class="overflow-x-auto bg-white rounded-lg shadow">
+            <table class="min-w-full">
                 <thead class="bg-gray-100">
                     <tr>
                         <th class="p-3 text-left cursor-pointer" onclick="sortLinks('title')">Judul</th>
@@ -72,7 +88,6 @@
         </div>
     </div>
 
-    <!-- Tambahkan script Supabase -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
         // Inisialisasi Supabase
@@ -80,66 +95,110 @@
         const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtmZnR4a2x6dXpicG1tZHZ5bWliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzgyODg0MjksImV4cCI6MjA1Mzg2NDQyOX0.urHew6FTdaXTxpcIh16K0Zxfjv-L7lo_2Gvh3BWzbfI';
         const supabase = supabase.createClient(supabaseUrl, supabaseKey);
 
-        let links = []; // Menyimpan data dari Supabase
-        let editingLinkId = null; // Untuk menyimpan ID link yang sedang diedit
+        let links = [];
+        let editingLinkId = null;
+        let filteredLinks = [];
+
+        // Handle form submission
+        async function handleSubmit(event) {
+            event.preventDefault();
+            if (editingLinkId) {
+                await updateLink();
+            } else {
+                await addLink();
+            }
+        }
 
         // Fungsi untuk mengambil data dari Supabase
         async function fetchLinks() {
-            const { data, error } = await supabase
-                .from('links')
-                .select('*');
-            if (error) {
-                console.error('Error fetching links:', error);
-            } else {
+            try {
+                const { data, error } = await supabase
+                    .from('links')
+                    .select('*')
+                    .order('date_added', { ascending: false });
+                
+                if (error) throw error;
+                
                 links = data;
+                filteredLinks = [...links];
                 renderLinks();
+                updateCategoryFilter();
+            } catch (error) {
+                console.error('Error fetching links:', error);
+                alert('Gagal mengambil data');
             }
         }
 
         // Fungsi untuk menambahkan link baru
         async function addLink() {
-            const title = document.getElementById('title').value;
-            const url = document.getElementById('url').value;
-            const category = document.getElementById('category').value;
-            const source = document.getElementById('source').value;
-            const dateAdded = document.getElementById('dateAdded').value;
-            const tags = document.getElementById('tags').value;
-            const description = document.getElementById('description').value;
-
-            const newLink = {
-                title,
-                url,
-                category,
-                source,
-                date_added: dateAdded,
-                tags,
-                description
-            };
-
-            const { data, error } = await supabase
-                .from('links')
-                .insert([newLink]);
-            if (error) {
-                console.error('Error adding link:', error);
-            } else {
+            try {
+                const formData = getFormData();
+                const { data, error } = await supabase
+                    .from('links')
+                    .insert([formData]);
+                
+                if (error) throw error;
+                
                 alert('Link berhasil ditambahkan!');
-                fetchLinks(); // Memuat ulang data dari Supabase
                 clearForm();
+                fetchLinks();
+            } catch (error) {
+                console.error('Error adding link:', error);
+                alert('Gagal menambahkan link');
+            }
+        }
+
+        // Fungsi untuk mengupdate link
+        async function updateLink() {
+            try {
+                const formData = getFormData();
+                const { error } = await supabase
+                    .from('links')
+                    .update(formData)
+                    .eq('id', editingLinkId);
+                
+                if (error) throw error;
+                
+                alert('Link berhasil diperbarui!');
+                clearForm();
+                fetchLinks();
+            } catch (error) {
+                console.error('Error updating link:', error);
+                alert('Gagal mengupdate link');
             }
         }
 
         // Fungsi untuk menghapus link
         async function deleteLink(id) {
-            const { error } = await supabase
-                .from('links')
-                .delete()
-                .eq('id', id);
-            if (error) {
-                console.error('Error deleting link:', error);
-            } else {
+            if (!confirm('Apakah Anda yakin ingin menghapus link ini?')) return;
+            
+            try {
+                const { error } = await supabase
+                    .from('links')
+                    .delete()
+                    .eq('id', id);
+                
+                if (error) throw error;
+                
                 alert('Link berhasil dihapus!');
-                fetchLinks(); // Memuat ulang data dari Supabase
+                fetchLinks();
+            } catch (error) {
+                console.error('Error deleting link:', error);
+                alert('Gagal menghapus link');
             }
+        }
+
+        // Fungsi untuk mendapatkan data form
+        function getFormData() {
+            return {
+                title: document.getElementById('title').value,
+                url: document.getElementById('url').value,
+                category: document.getElementById('category').value,
+                source: document.getElementById('source').value,
+                date_added: document.getElementById('dateAdded').value,
+                tags: document.getElementById('tags').value,
+                description: document.getElementById('description').value
+            };
         }
 
         // Fungsi untuk mengedit link
@@ -154,22 +213,48 @@
                 document.getElementById('dateAdded').value = link.date_added;
                 document.getElementById('tags').value = link.tags;
                 document.getElementById('description').value = link.description;
+                document.getElementById('submitButtonText').textContent = 'Update Link';
             }
         }
 
         // Fungsi untuk mengosongkan form
         function clearForm() {
-            ['title', 'url', 'category', 'source', 'dateAdded', 'tags', 'description'].forEach(id => {
-                document.getElementById(id).value = '';
+            document.getElementById('linkForm').reset();
+            editingLinkId = null;
+            document.getElementById('submitButtonText').textContent = 'Tambah Link';
+        }
+
+        // Fungsi untuk filter dan search
+        function filterLinks() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const categoryFilter = document.getElementById('categoryFilter').value;
+            
+            filteredLinks = links.filter(link => {
+                const matchesSearch = Object.values(link).some(value => 
+                    String(value).toLowerCase().includes(searchTerm)
+                );
+                const matchesCategory = !categoryFilter || link.category === categoryFilter;
+                return matchesSearch && matchesCategory;
             });
-            editingLinkId = null; // Reset ID edit
+            
+            renderLinks();
+        }
+
+        // Update category filter options
+        function updateCategoryFilter() {
+            const categories = [...new Set(links.map(link => link.category))];
+            const select = document.getElementById('categoryFilter');
+            select.innerHTML = '<option value="">Semua Kategori</option>' +
+                categories.map(category => 
+                    `<option value="${category}">${category}</option>`
+                ).join('');
         }
 
         // Fungsi untuk merender tabel
         function renderLinks() {
             const tbody = document.getElementById('linksTableBody');
-            tbody.innerHTML = links.map(link => `
-                <tr class="border-t">
+            tbody.innerHTML = filteredLinks.map(link => `
+                <tr class="border-t hover:bg-gray-50">
                     <td class="p-3">${link.title}</td>
                     <td class="p-3">
                         <a href="${link.url}" target="_blank" rel="noopener noreferrer" 
@@ -177,15 +262,15 @@
                     </td>
                     <td class="p-3">${link.category}</td>
                     <td class="p-3">${link.source}</td>
-                    <td class="p-3">${link.date_added}</td>
+                    <td class="p-3">${new Date(link.date_added).toLocaleDateString()}</td>
                     <td class="p-3">${link.tags}</td>
                     <td class="p-3">${link.description}</td>
                     <td class="p-3">
-                        <button onclick="editLink('${link.id}')" 
+                        <button onclick="editLink(${link.id})" 
                                 class="bg-yellow-500 text-white px-2 py-1 rounded hover:bg-yellow-600 mr-2">
                             Edit
                         </button>
-                        <button onclick="deleteLink('${link.id}')" 
+                        <button onclick="deleteLink(${link.id})" 
                                 class="bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600">
                             Hapus
                         </button>
@@ -194,26 +279,80 @@
             `).join('');
         }
 
+        // Fungsi untuk export data
+        function exportData() {
+            const dataStr = JSON.stringify(links, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'drive-links.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // Fungsi untuk import data
+        async function importData(event) {
+            try {
+                const file = event.target.files[0];
+                const reader = new FileReader();
+                
+                reader.onload = async function(e) {
+                    try {
+                        const importedData = JSON.parse(e.target.result);
+                        const { error } = await supabase
+                            .from('links')
+                            .insert(importedData);
+                        
+                        if (error) throw error;
+                        
+                        alert('Data berhasil diimport!');
+                        fetchLinks();
+                    } catch (error) {
+                        console.error('Error importing data:', error);
+                        alert('Gagal mengimport data');
+                    }
+                };
+                
+                reader.readAsText(file);
+            } catch (error) {
+                console.error('Error reading file:', error);
+                alert('Gagal membaca file');
+            }
+        }
+
         // Fungsi untuk sorting
         let sortDirection = {};
         function sortLinks(column) {
-            if (!sortDirection[column]) {
-                sortDirection[column] = 'asc';
-            } else {
-                sortDirection[column] = sortDirection[column] === 'asc' ? 'desc' : 'asc';
-            }
-
-            links.sort((a, b) => {
-                if (a[column] < b[column]) return sortDirection[column] === 'asc' ? -1 : 1;
-                if (a[column] > b[column]) return sortDirection[column] === 'asc' ? 1 : -1;
-                return 0;
+            sortDirection[column] = !sortDirection[column];
+            
+            filteredLinks.sort((a, b) => {
+                const aVal = a[column]?.toString().toLowerCase() ?? '';
+                const bVal = b[column]?.toString().toLowerCase() ?? '';
+                
+                return sortDirection[column] 
+                    ? aVal.localeCompare(bVal)
+                    : bVal.localeCompare(aVal);
             });
-
+            
             renderLinks();
         }
 
-        // Fungsi untuk memuat data saat aplikasi pertama kali dibuka
-        document.addEventListener('DOMContentLoaded', fetchLinks);
+        // Offline detection
+        window.addEventListener('online', updateOnlineStatus);
+        window.addEventListener('offline', updateOnlineStatus);
+
+        function updateOnlineStatus() {
+            document.body.classList.toggle('offline', !navigator.onLine);
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchLinks();
+            updateOnlineStatus();
+        });
     </script>
 </body>
 </html>
